@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# Patch script which migrates users on -licensed firmware (for example v8.5.8-licensed)
+# from Canada (124) to Canada/Licensed (1125)
+if grep -q -- "-licensed" /usr/lib/version; then
+	if grep -q "radio.1.countrycode=124" /tmp/system.cfg; then
+		sed -ri "s/radio\.([0-9]+)\.countrycode=.*/radio.\1.countrycode=1125/" /tmp/system.cfg
+		sed -ri "s/radio\.countrycode=.*/radio.countrycode=1125/" /tmp/system.cfg
+		cfgmtd -w -p /etc/
+	fi
+fi
+exit 0

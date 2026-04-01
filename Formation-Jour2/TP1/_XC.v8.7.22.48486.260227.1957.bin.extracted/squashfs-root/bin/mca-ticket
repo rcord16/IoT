@@ -1,0 +1,72 @@
+#!/bin/sh
+
+MA_TICKET_ADD=/bin/ma-ticket-add
+MA_TICKET_DEL=/bin/ma-rm
+TICKET_DB=/tmp/.tickets.tdb
+TICKET_USER=mcuser
+TICKET_DIR=/tmp/.session-tickets
+
+usage() {
+	echo "Usage: $0 <operation> <ticketid>"
+	echo "  where <operation> is one of:"
+	echo "     add - adds the ticket"
+	echo "     del - removes the ticket"
+}
+
+if [ $# -lt 2 ]; then
+        usage
+        exit 254 
+fi
+
+ticket_add() {
+	echo "Adding ticket to authorization backend..."
+	if [ -x $MA_TICKET_ADD ]; then
+		$MA_TICKET_ADD $TICKET_DB $1 $2
+		RC=$?
+	else
+		mkdir -p "$TICKET_DIR"
+		echo '{"created_at": '$(date +%s)'}' > "$TICKET_DIR/$1"
+		RC=$?
+	fi
+	echo "done. Status: $RC"
+	return $RC
+}
+
+ticket_del() {
+	echo "Removed ticket from authorization backend..."
+	if [ -x $MA_TICKET_DEL ]; then
+		$MA_TICKET_DEL $TICKET_DB $1
+		RC=$?
+	else
+		rm -f "$TICKET_DIR/$1"
+		RC=$?
+	fi
+	echo "done. Status: $RC"
+	return $RC
+}
+
+OP=$1
+TICKET=$2
+
+if [ ${#TICKET} -gt 32 -o ${#TICKET} -lt 32 ]; then
+	echo "Error: ticket id must be exactly 32 character long"
+	exit 1
+fi
+
+case "$OP" in
+	"add")
+		ticket_add $TICKET $TICKET_USER
+		RC=$?
+		;;
+	"del"|"rm")
+		ticket_del $TICKET
+		RC=$?
+		;;
+	*)
+		echo "ERROR: Unsupported operation '"$OP"'"
+		usage
+		RC=252
+		exit 252
+esac
+
+exit $RC

@@ -1,0 +1,49 @@
+#!/bin/sh
+
+. /usr/etc/rc.d/rc.funcs
+
+# reboot in 3 secs after kernel panic
+echo "3" > /proc/sys/kernel/panic
+# invoke kernel panic on OOM
+echo "2" > /proc/sys/vm/panic_on_oom
+
+if [ -f /etc/presysinit ]; then
+       	. /etc/persistent/rc.presysinit
+fi
+
+# create module list, skip ip/eb-tables
+if [ -d /etc/modules.d/ ]; then
+
+modules=`cd /etc/modules.d && ls`
+modules=`echo $modules | tr " " "\n" | grep -v -E ".*ipt-.*"`
+modules=`echo $modules | tr " " "\n" | grep -v -E ".*ebtables.*"`
+modules=`echo $modules | tr " " "\n" | grep -v -E ".*ip6tables.*"`
+
+# load modules
+. /usr/etc/rc.d/rc.modules load ${modules}
+
+fi
+
+# set hostname
+echo UBNT > /proc/sys/kernel/hostname
+
+# set sane defaults so that device does not OOM on DDoS attack
+echo "4096" > /proc/sys/net/ipv4/route/max_size
+echo "256" > /proc/sys/net/ipv4/route/gc_thresh
+
+# respond to broadcast ping - this is for discovering neighbours IP addresses
+echo "0" > /proc/sys/net/ipv4/icmp_echo_ignore_broadcasts
+
+# setup motd
+local ver=$(cat /etc/version)
+local prd=$(sed -n 's/^board.name=//p' /etc/board.info)
+local mac=$(sed -n 's/^board.hwaddr=//p' /etc/board.info)
+sed "s/{VERSION}/$ver/; s/{PRODUCT}/$prd/; s/{MAC}/$mac/" /usr/etc/motd > /etc/motd
+
+watchdog_start
+
+if [ -f /etc/postsysinit ]; then
+       	. /etc/persistent/rc.postsysinit
+fi
+
+dmesg > /tmp/boot.txt

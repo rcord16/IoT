@@ -1,0 +1,50 @@
+#!/bin/sh
+
+SERVICES_FILE="/etc/dhcp6c_services"
+
+dhcp6c_start_services()
+{
+	if [ ! -f $SERVICES_FILE ]; then 
+		echo "File $SERVICES_FILE does not exist"
+		return;
+	fi
+
+	for serv in `cat $SERVICES_FILE`; do
+		/usr/etc/init.d/plugin start $serv
+	done
+}
+
+dhcp6c_stop_services()
+{
+	if [ -f $SERVICES_FILE ]; then 
+		rev_servlist=""
+		for serv in `cat $SERVICES_FILE`; do
+			rev_servlist="$serv $rev_servlist"
+		done
+
+		for serv in $rev_servlist; do
+			/usr/etc/init.d/plugin stop $serv
+		done
+	else
+		echo "File $SERVICES_FILE does not exist"
+	fi
+}
+
+if [ -n "$new_domain_name" -o -n "$new_domain_name_servers" ]; then
+    old_resolv_conf=/etc/resolv.conf
+    new_resolv_conf=/etc/resolv.conf.dhcp6c-new
+    grep -v "dhcp6c" $old_resolv_conf > $new_resolv_conf
+    if [ -n "$new_domain_name" ]; then
+        echo "search $new_domain_name # dhcp6c" >> $new_resolv_conf
+    fi
+    if [ -n "new_domain_name_servers" ]; then
+        for nameserver in $new_domain_name_servers; do
+            echo "nameserver $nameserver # dhcp6c" >> $new_resolv_conf
+        done
+    fi
+    mv -f $new_resolv_conf $old_resolv_conf
+    dhcp6c_stop_services
+    dhcp6c_start_services
+fi
+
+exit 0

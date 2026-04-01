@@ -1,0 +1,20 @@
+ ___  ___
+|\  \|\  \      Welcome to airOS
+\ \  \\\  \
+ \ \  \\\  \    PRODUCT: {PRODUCT}
+  \ \  \\\  \	MAC: {MAC}
+   \ \_______\
+    \|_______|  VERSION: {VERSION}
+
+********************************* NOTICE **********************************
+* By logging in to, accessing, or using any Ubiquiti product, you are     *
+* signifying that you have read our Terms of Service (ToS) and End User   *
+* License Agreement (EULA), understand their terms, and agree to be       *
+* fully bound to them. The use of CLI (Command Line Interface) can        *
+* potentially harm Ubiquiti devices and result in lost access to them and *
+* their data. By proceeding, you acknowledge that the use of CLI to       *
+* modify device(s) outside of their normal operational scope, or in any   *
+* manner inconsistent with the ToS or EULA, will permanently and          *
+* irrevocably void any applicable warranty.                               *
+***************************************************************************
+

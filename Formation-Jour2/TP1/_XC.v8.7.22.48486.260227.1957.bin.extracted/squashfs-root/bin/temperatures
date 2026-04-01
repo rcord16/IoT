@@ -1,0 +1,121 @@
+#!/bin/sh
+
+# show			- prints current temperatures
+# show boot		- prints stored temperatures
+# init			- stores current temperatures
+
+TEMP_DIR="/tmp/temperatures"
+SYSTEM_TEMP_FILE="$TEMP_DIR/system"
+RADIO_MAIN_TEMP_FILE="$TEMP_DIR/radio_main"
+RADIO_BACKUP_TEMP_FILE="$TEMP_DIR/radio_backup"
+RADIO_MAIN_CRASH_TEMP_FILE="$TEMP_DIR/radio_main_crash"
+RADIO_BACKUP_CRASH_TEMP_FILE="$TEMP_DIR/radio_backup_crash"
+
+KERNEL_CRASH_LOG_FILE="/tmp/boot_reason/kernel_crash"
+
+RADIO_MAIN_ATH_SYSFS_FILE="/sys/devices/platform/soc/a800000.wifi/net/wifi0/thermal/temp"
+RADIO_MAIN_PRS_SYSFS_FILE="/sys/devices/platform/soc/8af8800.usb3/8a00000.dwc3/xhci-hcd.0.auto/usb2/2-1/prs_attrs/baseband_temp"
+
+get_system_temp() {
+	local temp="N/A"
+
+	if [ -c "/dev/i2c-0" ]; then
+		temp=$(i2cget -y 0 0x48 0 w 2>/dev/null)
+		if [ ! -z "$temp" ]; then
+			temp=$((((${temp} >> 12) | ((${temp} & 0xff)<<4))/16))
+			if [ "${temp}" -gt 128 ]; then
+				temp==$((temp - 256))
+			fi
+		fi
+	fi
+
+	echo "$temp"
+}
+
+get_radio_main_temp() {
+	local temp="N/A"
+
+	if [ -f "$RADIO_MAIN_PRS_SYSFS_FILE" ]; then
+		temp="$(cat "$RADIO_MAIN_PRS_SYSFS_FILE")"
+	elif [ -f "$RADIO_MAIN_ATH_SYSFS_FILE" ]; then
+		temp="$(cat "$RADIO_MAIN_ATH_SYSFS_FILE")"
+	else
+		local temp="$(athdiag --get --address=0x2a454 | grep Value | awk '{print $6}')"
+		temp=$((0x7b - ($temp & 0xff) + 50))
+	fi
+
+	echo "$temp"
+}
+
+get_radio_backup_temp() {
+	echo "N/A"
+}
+
+get_radio_main_crash_temp() {
+	local temp="N/A"
+	local tmp
+
+	if [ -f "$KERNEL_CRASH_LOG_FILE" ]; then
+		tmp=$(sed -nr 's/.*Radio temperature: ([0-9]+)C$/\1/p' ${KERNEL_CRASH_LOG_FILE})
+		[ -n "$tmp" ] && temp="$tmp"
+	fi
+
+	echo "$temp"
+}
+
+get_radio_backup_crash_temp() {
+	echo "N/A"
+}
+
+get_stored_temp() {
+	local file="$1"
+
+	if [ -f "$file" ]; then
+		cat "$file"
+	else
+		echo "N/A"
+	fi
+}
+
+print_temp() {
+	local name="$1"
+	local temp="$2"
+
+	echo "$name: $temp"
+}
+
+if [ "$1" == "show" ]; then
+	if [ "$2" == "boot" ]; then
+		print_temp "system" "$(get_stored_temp "$SYSTEM_TEMP_FILE")"
+		print_temp "radio_main" "$(get_stored_temp "$RADIO_MAIN_TEMP_FILE")"
+		print_temp "radio_backup" "$(get_stored_temp "$RADIO_BACKUP_TEMP_FILE")"
+		print_temp "radio_main_crash" "$(get_stored_temp "$RADIO_MAIN_CRASH_TEMP_FILE")"
+		print_temp "radio_backup_crash" "$(get_stored_temp "$RADIO_BACKUP_CRASH_TEMP_FILE")"
+
+		exit 0
+	elif [ "$2" == "radio_main" ]; then
+		echo "$(get_radio_main_temp)"
+
+		exit 0
+	elif [ "$#" == "1" ]; then
+		print_temp "system" "$(get_system_temp)"
+		print_temp "radio_main" "$(get_radio_main_temp)"
+		print_temp "radio_backup" "$(get_radio_backup_temp)"
+
+		exit 0
+	fi
+elif [ "$1" == "init" ]; then
+	mkdir -p "$TEMP_DIR"
+
+	get_system_temp > "$SYSTEM_TEMP_FILE"
+	get_radio_main_temp > "$RADIO_MAIN_TEMP_FILE"
+	get_radio_backup_temp > "$RADIO_BACKUP_TEMP_FILE"
+	get_radio_main_crash_temp > "$RADIO_MAIN_CRASH_TEMP_FILE"
+	get_radio_backup_crash_temp > "$RADIO_BACKUP_CRASH_TEMP_FILE"
+
+	exit 0
+else
+    echo "Invalid arguments" >&2
+    exit 1
+fi
+

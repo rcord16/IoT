@@ -1,0 +1,68 @@
+#!/bin/sh
+
+local C=/dev/console
+local G=/proc/sys/dev/ubnt_poll/gps_gpio
+
+#Reset GPS
+if [ -f ${G} ]; then
+	echo 1 > ${G}
+else
+#remap Console output
+	if [ -c $C ]; then
+		exec < $C 2>&1 > $C
+	fi
+fi
+
+FW_CHECKFILE="/etc/do-firmware-update"
+RD_CHECKFILE="/etc/reset-to-defaults"
+FWUPDATE="/sbin/fwupdate.real"
+CFG_CHECKFILE="/etc/do-config-save"
+CFG_SYSTEM="/tmp/system.cfg"
+CFG_SYSTEM_SORTED="/tmp/system.cfg.$$"
+echo="logger -t $0 -s"
+
+# if cfgmtd -w is running - wait for it
+while ! bgnd -s cfgmtd > /dev/null; do 
+	echo "Waiting for cfgmtd..."
+	sleep 1
+done
+
+# Stop everything that was not handled by plugin_stop.
+kill -15 -1
+
+if [ -f ${RD_CHECKFILE} ]; then
+	${echo} "Going to reset to defaults"
+	/sbin/cfgmtd -w -f /etc/default.cfg -d
+	echo 1 > /sys/kernel/debug/persti/flush
+elif [ -f ${CFG_CHECKFILE} ]; then
+	${echo} "Going to save config file"
+	sort $CFG_SYSTEM | tr -d "\r"> $CFG_SYSTEM_SORTED
+	/sbin/cfgmtd -w -f $CFG_SYSTEM_SORTED
+fi
+
+if [ -f ${FW_CHECKFILE} ]; then
+	if ${FWUPDATE} -c; then
+		${echo} "Going to firmware update mode"
+
+		# Cleanup to have more ram
+		rm -fr  /var/log/* /var/run/*
+		for f in /tmp/* /tmp/.*; do
+			if [ "$f" != "/tmp/fwupdate.bin" -a "$f" != "/tmp/." -a "$f" != "/tmp/.." ]; then
+				rm -fr "$f"
+			fi
+		done
+		dmesg -c > /dev/null
+
+		wdog_pid=`pidof watchdog`
+		if [ ".${wdog_pid}" != "." ]; then
+			# shutdown watchdog
+			kill -HUP ${wdog_pid}
+		fi
+
+		${FWUPDATE} -m; rc=$?
+
+		${echo} "FIRMWARE UPDATE FAILED, REASON=${rc}"
+	else
+		${echo} "Firmware update requested, but check failed!"
+	fi
+fi
